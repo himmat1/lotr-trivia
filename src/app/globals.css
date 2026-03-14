@@ -1,0 +1,164 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ─── LOTR Jeopardy Theme ─────────────────────────────────────────────────── */
+/* Dark navy background, gold accents, parchment text — inspired by Middle-earth */
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  /* LOTR Color Palette */
+  --color-navy:       #0a1628; /* primary background */
+  --color-navy-light: #111f3a; /* slightly lighter bg for cards */
+  --color-royal:      #1a3a6b; /* tile / panel background */
+  --color-royal-hover:#1e4d9e; /* tile hover */
+  --color-gold:       #c9a227; /* primary accent — point values, borders, headings */
+  --color-gold-light: #f0c040; /* hover / highlight gold */
+  --color-gold-dim:   #8a6e1a; /* muted gold for borders */
+  --color-parchment:  #f5e6c8; /* main text on dark backgrounds */
+  --color-ember:      #8b1a1a; /* wrong answer / danger */
+  --color-ember-light:#dc2626; /* wrong answer bright */
+  --color-mithril:    #c0c8d8; /* muted secondary text */
+  --color-forest:     #16a34a; /* correct answer / success */
+  --color-shadow:     #060e1c; /* deepest shadow */
+
+  /* Map to Tailwind semantic tokens */
+  --color-background:           var(--color-navy);
+  --color-foreground:           var(--color-parchment);
+  --color-primary:              var(--color-gold);
+  --color-primary-foreground:   var(--color-navy);
+  --color-secondary:            var(--color-royal);
+  --color-secondary-foreground: var(--color-parchment);
+  --color-muted:                var(--color-navy-light);
+  --color-muted-foreground:     var(--color-mithril);
+  --color-accent:               var(--color-gold-dim);
+  --color-destructive:          var(--color-ember);
+  --color-border:               var(--color-gold-dim);
+  --color-ring:                 var(--color-gold);
+
+  /* Font variables — loaded via next/font in layout.tsx */
+  --font-display: var(--font-cinzel);
+  --font-heading: var(--font-cinzel-deco);
+  --font-sans:    var(--font-cinzel);
+
+  /* Border radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+/* ─── Base Styles ──────────────────────────────────────────────────────────── */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--color-navy);
+  color: var(--color-parchment);
+  font-family: var(--font-cinzel), serif;
+  min-height: 100vh;
+  /* Subtle radial gradient from center for depth */
+  background-image: radial-gradient(ellipse at 50% 20%, #1a3a6b22 0%, transparent 60%);
+}
+
+/* ─── Jeopardy Tile Effects ────────────────────────────────────────────────── */
+
+/* Golden glow on active/hover tiles */
+.tile-glow {
+  box-shadow:
+    0 0 12px rgba(201, 162, 39, 0.5),
+    0 0 24px rgba(201, 162, 39, 0.2),
+    inset 0 1px 0 rgba(240, 192, 64, 0.2);
+}
+
+/* Stronger glow for Daily Double reveal */
+.tile-glow-dd {
+  box-shadow:
+    0 0 20px rgba(240, 192, 64, 0.8),
+    0 0 40px rgba(201, 162, 39, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Answered tile — dimmed and no pointer events */
+.tile-answered {
+  opacity: 0.15;
+  pointer-events: none;
+  background: var(--color-shadow) !important;
+}
+
+/* ─── Text Utilities ───────────────────────────────────────────────────────── */
+
+/* Gold shimmer heading text */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #f0c040 0%, #c9a227 40%, #f0c040 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Elvish-style letter spacing for headings */
+.tracking-elvish {
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ─── Scrollbar Styling ────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--color-shadow); }
+::-webkit-scrollbar-thumb { background: var(--color-gold-dim); border-radius: 3px; }
+
+/* ─── Decorative Border ────────────────────────────────────────────────────── */
+.ring-border {
+  border: 1px solid var(--color-gold-dim);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 0 20px rgba(10, 22, 40, 0.8);
+}
+
+/* ─── Timer Bar ────────────────────────────────────────────────────────────── */
+.timer-bar-track {
+  background: var(--color-shadow);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.timer-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 1s linear, background-color 0.5s ease;
+}
+
+/* Color shifts as time runs out: gold → amber → red */
+.timer-bar-fill[data-urgent="false"] {
+  background: linear-gradient(90deg, var(--color-gold), var(--color-gold-light));
+}
+.timer-bar-fill[data-urgent="true"] {
+  background: linear-gradient(90deg, var(--color-ember), var(--color-ember-light));
+}
+
+/* ─── Buzz-In Button Pulse ─────────────────────────────────────────────────── */
+@keyframes buzz-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(201, 162, 39, 0.7); }
+  50%       { box-shadow: 0 0 0 16px rgba(201, 162, 39, 0); }
+}
+
+.buzz-button-active {
+  animation: buzz-pulse 1.5s ease-in-out infinite;
+}
+
+/* ─── Score Change Pop ─────────────────────────────────────────────────────── */
+@keyframes score-pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.3); }
+  100% { transform: scale(1); }
+}
+
+.score-pop {
+  animation: score-pop 0.4s ease-out;
+}
+
+/* ─── Category Header ──────────────────────────────────────────────────────── */
+.category-header {
+  background: linear-gradient(180deg, #1e4d9e 0%, #1a3a6b 100%);
+  border-bottom: 2px solid var(--color-gold-dim);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
