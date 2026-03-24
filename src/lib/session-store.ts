@@ -4,12 +4,13 @@ import type {
   GameSession,
   GameBoard,
   Player,
-  CategoryName,
   ClientGameSession,
   ClientGameBoard,
   TriviaClue,
 } from "@/types/game";
-import { ALL_CATEGORIES, PLAYER_COLORS } from "@/types/game";
+import type { TopicId } from "@/types/game";
+import { PLAYER_COLORS } from "@/types/game";
+import { getTopicConfig } from "@/lib/topics";
 
 // ─── Singleton Pattern ────────────────────────────────────────────────────────
 // Use globalThis to survive Next.js hot-module reloads in development.
@@ -34,8 +35,9 @@ if (process.env.NODE_ENV !== "production") {
 
 // ─── Session CRUD ─────────────────────────────────────────────────────────────
 
-// Create a new empty game session for the given host player
-export function createSession(hostName: string): {
+// Create a new empty game session for the given host player.
+// topic defaults to "lotr" so existing behavior is unchanged.
+export function createSession(hostName: string, topic: TopicId = "lotr"): {
   session: GameSession;
   playerId: string;
 } {
@@ -51,11 +53,13 @@ export function createSession(hostName: string): {
     isConnected: true,
   };
 
-  // Build an empty board structure — filled in after question generation
-  const emptyBoard = buildEmptyBoard();
+  // Build an empty board using the topic's category list — filled in after question generation
+  const topicConfig = getTopicConfig(topic);
+  const emptyBoard = buildEmptyBoard(topicConfig.categories);
 
   const session: GameSession = {
     id,
+    topic,
     roomCode: id.slice(0, 6).toUpperCase(),
     players: [host],
     board: emptyBoard,
@@ -149,8 +153,9 @@ export function toClientSession(
 ): ClientGameSession {
   const clientBoard = {} as ClientGameBoard;
 
-  for (const category of ALL_CATEGORIES) {
-    clientBoard[category] = session.board[category].map((clue) => ({
+  // Iterate the actual board keys (which vary by topic) instead of the LOTR-only ALL_CATEGORIES
+  for (const category of Object.keys(session.board)) {
+    clientBoard[category] = (session.board[category] ?? []).map((clue) => ({
       ...clue,
       // Only reveal isDailyDouble for the specific clue just selected; always false in board listing
       // Cast needed: ClientTriviaClue requires isDailyDouble: false (literal), but we compute it
@@ -179,24 +184,25 @@ function pruneExpiredSessions() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// Build an empty board with placeholder clues (replaced after generation)
-function buildEmptyBoard(): GameBoard {
-  const board = {} as GameBoard;
-  for (const category of ALL_CATEGORIES) {
-    board[category as CategoryName] = [];
+// Build an empty board with placeholder arrays for each category
+function buildEmptyBoard(categories: string[]): GameBoard {
+  const board: GameBoard = {};
+  for (const category of categories) {
+    board[category] = [];
   }
   return board;
 }
 
-// Populate the board from a flat array of generated clues
+// Populate the board from a flat array of generated clues.
+// Categories are inferred from the clues themselves (no static list needed).
 export function buildBoardFromClues(clues: TriviaClue[]): GameBoard {
-  const board = buildEmptyBoard();
+  const board: GameBoard = {};
   for (const clue of clues) {
     if (!board[clue.category]) board[clue.category] = [];
     board[clue.category].push(clue);
   }
   // Sort each category by point value ascending
-  for (const category of ALL_CATEGORIES) {
+  for (const category of Object.keys(board)) {
     board[category].sort((a, b) => a.points - b.points);
   }
   return board;

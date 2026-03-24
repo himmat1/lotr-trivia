@@ -1,16 +1,22 @@
 "use client";
 
 // ─── Create Game Form ─────────────────────────────────────────────────────────
-// Host enters their name → POST /api/game/create → redirected to /game/[sessionId]
+// Host selects a topic → enters their name → POST /api/game/create
 // Their playerId is stored in sessionStorage to persist across page refreshes.
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sword } from "lucide-react";
+import { TOPICS } from "@/lib/topics";
+import type { TopicId } from "@/types/game";
+
+// Ordered list for the selector cards — LOTR first as the default
+const TOPIC_ORDER: TopicId[] = ["lotr", "friends", "animal_kingdom"];
 
 export default function CreateGameForm() {
   const router = useRouter();
   const [name, setName] = useState("");
+  const [topic, setTopic] = useState<TopicId>("lotr"); // LOTR selected by default
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -26,7 +32,8 @@ export default function CreateGameForm() {
       const res = await fetch("/api/game/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hostName: trimmed }),
+        // Include the selected topic so the server generates the right questions
+        body: JSON.stringify({ hostName: trimmed, topic }),
       });
 
       if (!res.ok) {
@@ -48,6 +55,60 @@ export default function CreateGameForm() {
 
   return (
     <form onSubmit={handleCreate} className="space-y-5">
+      {/* ── Topic Selector ── */}
+      <div>
+        <label
+          className="block text-xs font-semibold tracking-widest uppercase text-[var(--color-gold)] mb-3"
+          style={{ fontFamily: "var(--font-cinzel)" }}
+        >
+          Choose Your Topic
+        </label>
+
+        <div className="grid grid-cols-3 gap-2">
+          {TOPIC_ORDER.map((topicId) => {
+            const config = TOPICS[topicId];
+            const isSelected = topic === topicId;
+
+            return (
+              <button
+                key={topicId}
+                type="button"
+                onClick={() => setTopic(topicId)}
+                disabled={loading}
+                className={[
+                  "flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded transition-all",
+                  "border text-center disabled:opacity-50 disabled:cursor-not-allowed",
+                  isSelected
+                    ? "border-[var(--color-gold)] bg-[var(--color-gold)]10 ring-1 ring-[var(--color-gold)]"
+                    : "border-[var(--color-gold-dim)] bg-[var(--color-navy)] opacity-60 hover:opacity-80",
+                ].join(" ")}
+                style={
+                  isSelected
+                    ? { backgroundColor: "rgba(201,162,39,0.12)" }
+                    : {}
+                }
+              >
+                <span className="text-2xl leading-none select-none">
+                  {config.emoji}
+                </span>
+                <span
+                  className={[
+                    "text-xs font-semibold leading-tight tracking-wide text-center",
+                    isSelected
+                      ? "text-[var(--color-gold)]"
+                      : "text-[var(--color-mithril)]",
+                  ].join(" ")}
+                  style={{ fontFamily: "var(--font-cinzel)" }}
+                >
+                  {config.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Host Name ── */}
       <div>
         <label
           htmlFor="host-name"
@@ -90,7 +151,7 @@ export default function CreateGameForm() {
         {loading ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            Forging the Fellowship…
+            Creating Game…
           </>
         ) : (
           <>

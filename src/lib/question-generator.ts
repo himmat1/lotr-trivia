@@ -1,6 +1,6 @@
 // ─── Question Generator ───────────────────────────────────────────────────────
 // Orchestrates the full pipeline:
-//   1. Fetch live LOTR context from The One API (cached)
+//   1. (LOTR only) Fetch live context from The One API (cached)
 //   2. Build prompt with randomSeed for variation between games
 //   3. Call Claude claude-sonnet-4-6 to generate 31 structured questions
 //   4. Parse and validate the JSON response
@@ -10,8 +10,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { fetchLOTRContext } from "@/lib/the-one-api";
 import { buildQuestionPrompt } from "@/lib/prompts/question-prompt";
 import { FALLBACK_QUESTIONS } from "@/lib/fallback-questions";
-import type { TriviaClue, CategoryName } from "@/types/game";
-import { ALL_CATEGORIES } from "@/types/game";
+import { getTopicConfig } from "@/lib/topics";
+import type { TriviaClue } from "@/types/game";
+import type { TopicId } from "@/types/game";
 
 // Lazy-initialized Anthropic client — only created when question generation is needed
 let anthropicClient: Anthropic | null = null;
@@ -29,14 +30,16 @@ function getAnthropicClient(): Anthropic {
 
 // Generates 30 board questions + 1 Final Jeopardy question for a game session.
 // Returns validated TriviaClue[] ready to be organized into a GameBoard.
-export async function generateQuestions(): Promise<{
+export async function generateQuestions(topic: TopicId = "lotr"): Promise<{
   boardClues: TriviaClue[];
   finalJeopardyClue: TriviaClue | null;
 }> {
+  const topicConfig = getTopicConfig(topic);
+
   // If no API key configured, skip to fallback immediately
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn("[QuestionGen] No ANTHROPIC_API_KEY — using fallback questions");
-    return splitFallback(FALLBACK_QUESTIONS);
+    return splitFallback(FALLBACK_QUESTIONS[topic]);
   }
 
   let attempt = 0;
@@ -45,14 +48,20 @@ export async function generateQuestions(): Promise<{
   while (attempt < maxAttempts) {
     attempt++;
     try {
-      console.log(`[QuestionGen] Attempt ${attempt}: fetching LOTR context...`);
-      const context = await fetchLOTRContext();
+      // Only fetch The One API context for LOTR — other topics don't need it
+      let lotrContext = null;
+      if (topic === "lotr") {
+        console.log(`[QuestionGen] Attempt ${attempt}: fetching LOTR context...`);
+        lotrContext = await fetchLOTRContext();
+      } else {
+        console.log(`[QuestionGen] Attempt ${attempt}: generating ${topicConfig.name} questions...`);
+      }
 
       // Random seed drives question variation between games
       const seed = Math.floor(Math.random() * 999999);
-      const prompt = buildQuestionPrompt(context, seed, true);
+      const prompt = buildQuestionPrompt(topicConfig, seed, lotrContext, true);
 
-      console.log("[QuestionGen] Calling Claude claude-sonnet-4-6...");
+      console.log(`[QuestionGen] Calling Claude claude-sonnet-4-6 for topic: ${topic}...`);
       const client = getAnthropicClient();
 
       const response = await client.messages.create({
@@ -68,11 +77,11 @@ export async function generateQuestions(): Promise<{
         .join("");
 
       // Parse JSON — Claude should return a bare array
-      const clues = parseCluesFromResponse(rawText);
+      const clues = parseCluesFromResponse(rawText, topicConfig.categories);
 
       if (clues.length >= 30) {
         console.log(
-          `[QuestionGen] Successfully generated ${clues.length} questions`
+          `[QuestionGen] Successfully generated ${clues.length} questions for topic: ${topic}`
         );
         return splitFallback(clues);
       }
@@ -86,14 +95,15 @@ export async function generateQuestions(): Promise<{
   }
 
   // Both attempts failed — fall back to hardcoded questions
-  console.warn("[QuestionGen] All attempts failed — using fallback questions");
-  return splitFallback(FALLBACK_QUESTIONS);
+  console.warn(`[QuestionGen] All attempts failed — using fallback questions for topic: ${topic}`);
+  return splitFallback(FALLBACK_QUESTIONS[topic]);
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // Parse the raw Claude response into validated TriviaClue[]
-function parseCluesFromResponse(raw: string): TriviaClue[] {
+// validCategories: the list of category names expected for this topic
+function parseCluesFromResponse(raw: string, validCategories: string[]): TriviaClue[] {
   // Strip markdown code blocks if Claude wrapped the JSON
   const cleaned = raw
     .replace(/```json\s*/gi, "")
@@ -117,31 +127,32 @@ function parseCluesFromResponse(raw: string): TriviaClue[] {
   // Validate and coerce each clue
   const validated: TriviaClue[] = [];
   for (const item of parsed) {
-    const clue = validateClue(item);
+    const clue = validateClue(item, validCategories);
     if (clue) validated.push(clue);
   }
 
   return validated;
 }
 
-// Validate a single clue object and coerce types
-function validateClue(raw: unknown): TriviaClue | null {
+// Validate a single clue object — coerce types and reject malformed entries
+function validateClue(raw: unknown, validCategories: string[]): TriviaClue | null {
   if (!raw || typeof raw !== "object") return null;
   const obj = raw as Record<string, unknown>;
 
   const id = String(obj.id ?? "");
-  const category = obj.category as CategoryName;
+  const category = String(obj.category ?? "");
   const points = Number(obj.points);
   const clue = String(obj.clue ?? "");
   const correct_answer = String(obj.correct_answer ?? "");
   const difficulty = String(obj.difficulty ?? "medium");
 
-  // Skip if required fields are missing or invalid
+  // Skip if required fields are missing or category is not recognized for this topic
+  // Also allow points: 0 for the Final Jeopardy clue
   if (
     !id ||
     !clue ||
     !correct_answer ||
-    !ALL_CATEGORIES.includes(category) ||
+    !validCategories.includes(category) ||
     (!([200, 400, 600, 800, 1000, 0] as number[]).includes(points))
   ) {
     return null;

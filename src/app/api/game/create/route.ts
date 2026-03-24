@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSession, updateSession, buildBoardFromClues } from "@/lib/session-store";
 import { generateQuestions } from "@/lib/question-generator";
 import { advanceFromReveal } from "@/lib/game-engine";
+import type { TopicId } from "@/types/game";
+import { TOPICS } from "@/lib/topics";
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,8 +21,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Validate topic — default to "lotr" if not provided or unrecognized
+    const rawTopic = body.topic;
+    const topic: TopicId = rawTopic && rawTopic in TOPICS ? rawTopic : "lotr";
+
     // Create session in "waiting" phase — questions aren't generated yet
-    const { session, playerId } = createSession(hostName);
+    const { session, playerId } = createSession(hostName, topic);
 
     // Kick off question generation in the background — don't await it.
     // The session starts in "waiting" → host starts game → "generating" → "board"
@@ -42,10 +48,10 @@ export async function POST(req: NextRequest) {
 // This runs server-side after the host triggers "start_game".
 // It generates questions and updates the session — called without awaiting
 // so the client gets an immediate response with phase="generating".
-export async function runQuestionGeneration(sessionId: string) {
+export async function runQuestionGeneration(sessionId: string, topic: TopicId = "lotr") {
   try {
-    console.log(`[QuestionGen] Starting for session ${sessionId}`);
-    const { boardClues, finalJeopardyClue } = await generateQuestions();
+    console.log(`[QuestionGen] Starting for session ${sessionId} (topic: ${topic})`);
+    const { boardClues, finalJeopardyClue } = await generateQuestions(topic);
 
     // Build the 6×5 board from flat clue array
     const board = buildBoardFromClues(boardClues);

@@ -2,16 +2,17 @@
 // Single source of truth for all TypeScript interfaces in the LOTR Trivia app.
 // Every module (session store, game engine, API routes, React context) imports from here.
 
-// The 6 fixed Jeopardy categories covering all LOTR/Hobbit source material
-export type CategoryName =
-  | "Fellowship & Heroes"
-  | "Rings & Dark Powers"
-  | "Lands of Middle-earth"
-  | "Epic Battles & Wars"
-  | "The Shire & Hobbit Life"
-  | "Ancient Lore & Languages";
+// Which trivia topic the game is about — determines categories and Claude prompt
+export type TopicId = "lotr" | "friends" | "animal_kingdom";
 
-export const ALL_CATEGORIES: CategoryName[] = [
+// CategoryName is now a plain string so the board can hold any topic's categories.
+// Type safety is preserved by TopicConfig (categories validated at definition time)
+// and by Object.keys(session.board) iteration instead of the global ALL_CATEGORIES constant.
+export type CategoryName = string;
+
+// Kept for backward compatibility — only used for the default LOTR board.
+// New code should use Object.keys(session.board) or getTopicConfig(topic).categories.
+export const ALL_CATEGORIES: string[] = [
   "Fellowship & Heroes",
   "Rings & Dark Powers",
   "Lands of Middle-earth",
@@ -45,8 +46,8 @@ export interface TriviaClue {
   source: "one_api" | "claude";
 }
 
-// Board is a record of 6 categories, each with exactly 5 clues (one per point value)
-export type GameBoard = Record<CategoryName, TriviaClue[]>;
+// Board is a record of categories (keys depend on topic), each with 5 clues per point value
+export type GameBoard = Record<string, TriviaClue[]>;
 
 // ─── Player ──────────────────────────────────────────────────────────────────
 
@@ -104,6 +105,8 @@ export interface FinalJeopardyState {
 
 export interface GameSession {
   id: string;
+  // Which trivia topic this game is using — determines categories and prompt
+  topic: TopicId;
   // 6-character room code displayed in the lobby — derived from first 6 chars of id
   roomCode: string;
   players: Player[];
@@ -153,7 +156,7 @@ export type ClientTriviaClue = Omit<TriviaClue, "isDailyDouble"> & {
   isDailyDouble: false; // always false in board listing
 };
 
-export type ClientGameBoard = Record<CategoryName, ClientTriviaClue[]>;
+export type ClientGameBoard = Record<string, ClientTriviaClue[]>;
 
 // Session as sent to clients (board has isDailyDouble hidden)
 export type ClientGameSession = Omit<GameSession, "board" | "dailyDoubleIds"> & {

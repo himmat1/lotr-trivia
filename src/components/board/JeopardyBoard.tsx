@@ -6,7 +6,7 @@
 
 import { useState, useCallback } from "react";
 import { useGame } from "@/lib/contexts/game-context";
-import { ALL_CATEGORIES, ALL_POINT_VALUES } from "@/types/game";
+import { ALL_POINT_VALUES } from "@/types/game";
 import CategoryHeader from "./CategoryHeader";
 import ClueTile from "./ClueTile";
 import Scoreboard from "./Scoreboard";
@@ -32,6 +32,8 @@ export default function JeopardyBoard() {
 
   if (!session) return null;
 
+  // Derive categories from the session board (works for any topic)
+  const categories = Object.keys(session.board);
   const isMyTurn = session.currentPickerId === playerId;
   const isActivePhase = ["clue_open", "buzzed_in", "answer_reveal"].includes(session.phase);
   const isDDPhase = session.phase === "daily_double";
@@ -60,16 +62,16 @@ export default function JeopardyBoard() {
           ) : null}
         </div>
 
-        {/* 6-column grid: one column per category */}
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(6, 1fr)" }}>
+        {/* Grid: one column per category — column count matches the topic's category count */}
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${categories.length}, 1fr)` }}>
           {/* Category headers */}
-          {ALL_CATEGORIES.map((category) => (
+          {categories.map((category) => (
             <CategoryHeader key={category} name={category} />
           ))}
 
-          {/* Clue tiles: 5 rows × 6 columns */}
+          {/* Clue tiles: 5 rows × N columns (one per category) */}
           {ALL_POINT_VALUES.map((points) =>
-            ALL_CATEGORIES.map((category) => {
+            categories.map((category) => {
               const clue = session.board[category]?.find((c) => c.points === points);
               if (!clue) return <div key={`${category}-${points}`} className="min-h-[70px]" />;
 

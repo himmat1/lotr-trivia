@@ -42,8 +42,8 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
   // Special case: start_game triggers async question generation
   if (action.type === "start_game") {
     const updated = updateSession(sessionId, { phase: "generating" });
-    // Fire and forget — question generation updates the session asynchronously
-    runQuestionGeneration(sessionId);
+    // Fire and forget — pass the session's topic so Claude generates the right questions
+    runQuestionGeneration(sessionId, session.topic);
     return NextResponse.json(toClientSession(updated!));
   }
 

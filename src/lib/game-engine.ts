@@ -3,7 +3,7 @@
 // The API routes call these and then pass results to updateSession().
 
 import type { GameSession, GameAction, TriviaClue, Player } from "@/types/game";
-import { ALL_CATEGORIES } from "@/types/game";
+import { getTopicConfig } from "@/lib/topics";
 
 // ─── Clue Selection ───────────────────────────────────────────────────────────
 
@@ -227,7 +227,7 @@ export function advanceFromReveal(session: GameSession): GameSession {
 
   if (remaining === 0) {
     // All clues answered — trigger Final Jeopardy
-    const fjClue = generateFinalJeopardyPlaceholder();
+    const fjClue = generateFinalJeopardyPlaceholder(session);
     return {
       ...session,
       phase: "final_jeopardy",
@@ -257,7 +257,8 @@ export function advanceFromReveal(session: GameSession): GameSession {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function findClueById(session: GameSession, clueId: string): TriviaClue | null {
-  for (const category of ALL_CATEGORIES) {
+  // Use Object.keys so this works for any topic's board, not just LOTR
+  for (const category of Object.keys(session.board)) {
     const found = session.board[category]?.find((c) => c.id === clueId);
     if (found) return found;
   }
@@ -266,7 +267,7 @@ function findClueById(session: GameSession, clueId: string): TriviaClue | null {
 
 function markClueAnswered(session: GameSession, clueId: string): typeof session.board {
   const updatedBoard = { ...session.board };
-  for (const category of ALL_CATEGORIES) {
+  for (const category of Object.keys(session.board)) {
     updatedBoard[category] = (session.board[category] ?? []).map((c) =>
       c.id === clueId ? { ...c, isAnswered: true } : c
     );
@@ -290,17 +291,18 @@ function nextPlayerAfter(session: GameSession, currentPlayerId: string): string 
 
 function countRemainingClues(session: GameSession): number {
   let count = 0;
-  for (const category of ALL_CATEGORIES) {
+  for (const category of Object.keys(session.board)) {
     count += (session.board[category] ?? []).filter((c) => !c.isAnswered).length;
   }
   return count;
 }
 
-// Placeholder for the Final Jeopardy clue — real clue is injected by question-generator
-function generateFinalJeopardyPlaceholder(): TriviaClue {
+// Placeholder for the Final Jeopardy clue — uses the topic's FJ category label
+function generateFinalJeopardyPlaceholder(session: GameSession): TriviaClue {
+  const topicConfig = getTopicConfig(session.topic ?? "lotr");
   return {
     id: "final-jeopardy",
-    category: "Ancient Lore & Languages",
+    category: topicConfig.finalJeopardyCategory,
     points: 0 as never,
     clue: "",
     correct_answer: "",
